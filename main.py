@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from app.schemas import DatiSensori
 from app.motore_ai import addestra_modello
 
