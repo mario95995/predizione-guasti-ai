@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import pandas as pd  # AGGIUNTO: ci serve per manipolare i dati del grafico
 
 # Configurazione della pagina
 st.set_page_config(page_title="Dashboard Manutenzione AI", layout="centered")
@@ -107,8 +108,25 @@ else:
             dati_storico = risposta_storico.json()
             
             if dati_storico:
-                # Streamlit fa la magia: trasforma il JSON in una tabella interattiva!
-                st.dataframe(dati_storico, use_container_width=True)
+                # 1. Convertiamo i dati ricevuti in un DataFrame di Pandas
+                df_storico = pd.DataFrame(dati_storico)
+                
+                # Mostriamo la tabella (come prima)
+                st.dataframe(df_storico, use_container_width=True)
+                
+                # --- NUOVO: GRAFICO VISIVO ---
+                st.subheader("📈 Andamento Temperature e Vibrazioni")
+                
+                # Ordiniamo i dati dall'ID più piccolo (vecchio) al più grande (recente) 
+                # per far andare il grafico da sinistra verso destra nel tempo
+                df_grafico = df_storico.sort_values(by="id")
+                
+                # Impostiamo l'ID come asse X del nostro grafico
+                df_grafico.set_index("id", inplace=True)
+                
+                # Disegniamo il grafico a linee usando solo le colonne dei sensori
+                st.line_chart(df_grafico[["temperatura", "vibrazioni"]])
+                
             else:
                 st.info("Nessun dato presente nello storico. Fai prima qualche predizione!")
         else:
