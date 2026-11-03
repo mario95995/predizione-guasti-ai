@@ -14,11 +14,16 @@ from app.schemas import UtenteRegistrato, Token
 import jwt
 import os
 
+#addestramento con dati file csv
+import joblib
+
+
 models.Base.metadata.create_all(bind = engine)
 
 app = FastAPI(title="Manutenzione_AI")
-modello_ai, accuratezza_modello = addestra_modello()
 
+# Il server carica istantaneamente la "memoria" già addestrata
+modello_ai = joblib.load("modello_industriale.joblib")
 #dichiariamo a fastapi dove deve prendere il token 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
@@ -75,28 +80,30 @@ def login(form_data : OAuth2PasswordRequestForm = Depends(), db : Session = Depe
 
 @app.get("/")
 async def Manutenzione_Ai():
-    return {"sistema": "Manutenzione IOT", "status" : "operativo", "accuratezza_modello" : accuratezza_modello}
+    return {"sistema": "Manutenzione IOT", "status" : "operativo",}
 
 @app.post("/api/predizione")
 async def RiceviDati(prompt : DatiSensori, token : str = Depends(oauth2_scheme), db : Session = Depends(get_db)):
     temperature = prompt.temperatura
     vibration = prompt.vibrazioni
 
-    #calcolo del modello ai
-    dati_formattati = [[temperature, vibration]] # fa la lettura di un solo braccio robotico in un preciso instante
+    # calcolo del modello ai
+    dati_formattati = [[temperature, vibration]] # fa la lettura di un solo braccio robotico in un preciso istante
     probabilita = modello_ai.predict_proba(dati_formattati)
-    prob_guasto = probabilita[0][1] #estraiamo la percentuale di rottura 
+    
+    # CAST A FLOAT: eviterà errori di scrittura nel database SQLite
+    prob_guasto = float(probabilita[0][1]) # estraiamo la percentuale di rottura 
     soglia_incertezza = 0.20
 
-    #logica sul danno 
-    if abs(prob_guasto - 0.5) < soglia_incertezza :
-        azione = "DUBBIO: Richiesto intervento del Business Analyst / Tecnico umano."
+    # logica sul danno (USIAMO LE CHIAVI ESATTE PER STREAMLIT)
+    if abs(prob_guasto - 0.5) < soglia_incertezza:
+        azione = "DUBBIO"
     elif prob_guasto >= 0.5:
-        azione = "ALERT: Attivare procedura d'emergenza (Manutenzione immediata)."
-    else : azione = "OK: Funzionamento regolare del braccio robotico."
+        azione = "ALERT"
+    else: 
+        azione = "OK"
 
-
-    #salvataggio nel database
+    # salvataggio nel database
     nuova_predizione = models.StoricoPredizioni(
         temperatura = temperature,
         vibrazioni = vibration,
@@ -107,9 +114,11 @@ async def RiceviDati(prompt : DatiSensori, token : str = Depends(oauth2_scheme),
     db.commit()
     db.refresh(nuova_predizione)
 
+    # RITORNO AGGIORNATO CON ID
     return {
-    "probabilita_guasto": prob_guasto,
-    "azione": azione
+        "id_record": nuova_predizione.id,
+        "probabilita_guasto": prob_guasto,
+        "azione": azione
     }
 
 @app.get("/api/storico")
