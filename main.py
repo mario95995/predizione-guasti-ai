@@ -128,3 +128,29 @@ async def ottieni_storico(token: str = Depends(oauth2_scheme), db: Session = Dep
     
     # FastAPI convertirà automaticamente questa lista di oggetti in JSON!
     return storico
+
+
+@app.post("/api/predizione_batch")
+async def Ricevi_dati_batch(lista_dati : list[DatiSensori], token : str = Depends(oauth2_scheme), db : Session = Depends(get_db)):
+    #return {"messaggio" : f"Ricevuti {len(lista_dati)} record pronti per l'AI"}
+    dati_formattati = []
+    for dati in lista_dati : 
+        dati_formattati.append([dati.temperatura, dati.vibrazioni])
+
+    probabilita_totali = modello_ai.predict_proba(dati_formattati)
+    risultati_finali = []
+    soglia_incertezza = 0.20
+
+    for probabilita in probabilita_totali:
+        prob_guasto = float(probabilita[1])
+        if abs(prob_guasto - 0.5) < soglia_incertezza : 
+            azione = "Dubbio"
+            risultati_finali.append({"probabilità_guasto" : prob_guasto, "azione" : azione})
+        elif prob_guasto >= 0.5 : 
+            azione = "Allert"
+            risultati_finali.append({"probabilita_guasto" : prob_guasto, "azione": azione})
+        else : 
+            azione = "Ok"
+            risultati_finali.append({"probabilita_guasto" : prob_guasto, "azione": azione})
+
+    return risultati_finali

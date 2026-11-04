@@ -70,7 +70,7 @@ else:
         df_sensori = pd.read_csv("macchinari_dataset.csv")
         
         # 2. Mostriamo tutti i dati in una tabella
-        st.dataframe(df_sensori, use_container_width=True)
+        st.dataframe(df_sensori, width="stretch")
         
         # 3. Grafico visivo
         st.subheader("📈 Andamento Temperature e Vibrazioni")
@@ -78,8 +78,46 @@ else:
         
         # 4. Prepariamo il terreno per la nuova analisi AI di gruppo
         st.markdown("---")
+        # if st.button("🧠 Avvia Analisi AI su tutto il dataset"):
+        #     st.info("Qui a breve collegheremo il backend per far analizzare all'AI tutte queste righe!")
         if st.button("🧠 Avvia Analisi AI su tutto il dataset"):
-            st.info("Qui a breve collegheremo il backend per far analizzare all'AI tutte queste righe!")
+            # Mostriamo uno spinner visivo mentre il server elabora i 1000 record
+            with st.spinner("L'AI sta analizzando l'intero dataset. Attendere..."):
+                
+                # 1. Prepariamo il payload convertendo il DataFrame in una lista di dizionari
+                payload_batch = df_sensori[["temperatura", "vibrazioni"]].to_dict(orient="records")
+                
+                # 2. Prepariamo gli header con il token di sicurezza
+                headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+                
+                try:
+                    # 3. Chiamiamo la nuova rotta batch del backend
+                    risposta = requests.post("http://127.0.0.1:8000/api/predizione_batch", json=payload_batch, headers=headers)
+                    
+                    if risposta.status_code == 200:
+                        # 4. Estraiamo i risultati in formato JSON (lista di dizionari)
+                        risultati = risposta.json()
+                        
+                        # 5. Li convertiamo in un nuovo DataFrame
+                        df_risultati = pd.DataFrame(risultati)
+                        
+                        # 6. Uniamo il dataset originale (sensori) con i risultati dell'AI
+                        df_completo = pd.concat([df_sensori, df_risultati], axis=1)
+                        
+                        # 7. Mostriamo la tabella fusa a schermo
+                        st.subheader("📋 Risultati dell'Analisi Predittiva")
+                        st.dataframe(df_completo, width="stretch")
+                        st.success(f"✅ Analisi AI completata in batch su {len(df_completo)} record in pochi millisecondi!")
+                        
+                        # Bonus per il capo gruppo: un contatore rapido dei danni trovati
+                        guasti_trovati = len(df_completo[df_completo["azione"] == "Allert"])
+                        st.warning(f"🚨 L'AI ha isolato {guasti_trovati} record in stato di Allert critico.")
+                        
+                    else:
+                        st.error(f"⚠️ Errore di comunicazione col server AI: {risposta.status_code} - {risposta.text}")
+                
+                except Exception as e:
+                    st.error(f"❌ Impossibile connettersi al server Backend: {e}")
             
     except FileNotFoundError:
         st.error("⚠️ File 'macchinari_dataset.csv' non trovato nella cartella.")
@@ -169,7 +207,7 @@ else:
                 df_storico = pd.DataFrame(dati_storico)
                 
                 # Mostriamo la tabella (come prima)
-                st.dataframe(df_storico, use_container_width=True)
+                st.dataframe(df_storico, width="stretch")
                 
                 # --- NUOVO: GRAFICO VISIVO ---
                 st.subheader("📈 Andamento Temperature e Vibrazioni")
